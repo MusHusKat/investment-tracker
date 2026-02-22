@@ -75,7 +75,8 @@ model Property {
   purchasePrice Decimal?  @db.Decimal(15, 2)
   ownershipPct  Decimal   @default(100) @db.Decimal(5, 2)  // 0-100
   notes         String?
-  isActive      Boolean   @default(true)
+  isActive           Boolean   @default(true)
+  appreciationRate   Decimal   @default(0.05) @db.Decimal(6, 4)  // annual rate e.g. 0.05 = 5%
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -84,6 +85,15 @@ model Property {
   loans         Loan[]
   valuations    Valuation[]
   portfolioProperties PortfolioProperty[]
+
+  // Event model
+  purchaseEvent       PurchaseEvent?
+  loanEvents          LoanEvent[]
+  tenancyEvents       TenancyEvent[]
+  recurringCostEvents RecurringCostEvent[]
+  oneOffEvents        OneOffEvent[]
+  valuationEvents     ValuationEvent[]
+  saleEvent           SaleEvent?
 
   @@index([userId])
 }
@@ -159,6 +169,145 @@ model Valuation {
 
   @@index([propertyId])
   @@index([valuedAt])
+}
+
+// ─── Event Model ─────────────────────────────────────────────────────────────
+// Each table represents a versioned event stream for a property.
+// KPIs are derived by replaying events up to a given date.
+
+model PurchaseEvent {
+  id              String    @id @default(cuid())
+  propertyId      String    @unique   // one per property
+  settlementDate  DateTime
+  purchasePrice   Decimal   @db.Decimal(15, 2)
+  deposit         Decimal?  @db.Decimal(15, 2)
+  stampDuty       Decimal?  @db.Decimal(15, 2)
+  legalFees       Decimal?  @db.Decimal(15, 2)
+  buyersAgentFee  Decimal?  @db.Decimal(15, 2)
+  loanAmount      Decimal?  @db.Decimal(15, 2)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+// Each row = a new loan configuration from effectiveDate onwards
+model LoanEvent {
+  id                  String    @id @default(cuid())
+  propertyId          String
+  effectiveDate       DateTime
+  lender              String?
+  loanType            String    // "IO" | "PI"
+  rateType            String    // "fixed" | "variable"
+  annualRate          Decimal   @db.Decimal(6, 4)   // e.g. 0.0574 = 5.74%
+  repaymentAmount     Decimal   @db.Decimal(15, 2)
+  repaymentCadence    String    // "weekly" | "fortnightly" | "monthly"
+  fixedExpiry         DateTime?
+  offsetBalance       Decimal?  @db.Decimal(15, 2)
+  // Manual balance override — user can enter current balance directly
+  // instead of computing from structure
+  manualLoanBalance   Decimal?  @db.Decimal(15, 2)
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([effectiveDate])
+}
+
+// TenancyEvent covers START, RENT_CHANGE, END in one table
+model TenancyEvent {
+  id              String    @id @default(cuid())
+  propertyId      String
+  type            String    // "START" | "RENT_CHANGE" | "END"
+  effectiveDate   DateTime
+  weeklyRent      Decimal?  @db.Decimal(10, 2)   // null on END
+  leaseTermMonths Int?                             // on START
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([effectiveDate])
+}
+
+// RecurringCostEvent: a new row = a change to a recurring cost from effectiveDate
+model RecurringCostEvent {
+  id              String    @id @default(cuid())
+  propertyId      String
+  effectiveDate   DateTime
+  endDate         DateTime?  // null = ongoing
+  category        String     // "STRATA" | "COUNCIL" | "INSURANCE" | "MGMT_FEE" | "WATER" | "OTHER"
+  feeType         String     // "fixed" | "pct_rent"
+  amount          Decimal    @db.Decimal(10, 4)   // weekly $ if fixed; 0.075 if pct_rent (7.5%)
+  cadence         String     // "weekly" | "monthly" | "quarterly" | "annually"
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([effectiveDate])
+}
+
+// OneOffEvent: single expenses or incomes at a point in time
+model OneOffEvent {
+  id          String    @id @default(cuid())
+  propertyId  String
+  date        DateTime
+  amount      Decimal   @db.Decimal(15, 2)  // positive = income, negative = expense
+  category    String    // "MAINTENANCE" | "RENOVATION" | "CAPEX" | "INSPECTION" |
+                        // "LEASE_RENEWAL" | "INSURANCE_CLAIM" | "LEGAL" | "OTHER"
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([date])
+}
+
+// ValuationEvent replaces the old Valuation table (kept for migration)
+model ValuationEvent {
+  id          String    @id @default(cuid())
+  propertyId  String
+  date        DateTime
+  value       Decimal   @db.Decimal(15, 2)
+  source      String?   // "BANK" | "AGENT" | "SELF" | "AUSPROPERTY"
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([date])
+}
+
+// SaleEvent: records when a property is sold
+model SaleEvent {
+  id              String    @id @default(cuid())
+  propertyId      String    @unique  // one sale per property
+  settlementDate  DateTime
+  salePrice       Decimal   @db.Decimal(15, 2)
+  agentFee        Decimal?  @db.Decimal(15, 2)   // agent commission
+  legalFees       Decimal?  @db.Decimal(15, 2)
+  otherCosts      Decimal?  @db.Decimal(15, 2)   // staging, repairs, etc.
+  mortgageExit    Decimal?  @db.Decimal(15, 2)   // break cost / discharge fee
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
 }
 
 model Portfolio {

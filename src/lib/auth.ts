@@ -1,7 +1,9 @@
 import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { getServerSession as nextAuthGetServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
-import { hash } from "crypto";
+import { hash, createHmac } from "crypto";
+import { NextRequest } from "next/server";
 
 function simpleHash(password: string): string {
   return hash("sha256", password);
@@ -77,3 +79,43 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
+interface MobileSession {
+  user: { id: string; email: string; name: string | null };
+}
+
+function verifyMobileJwt(token: string): MobileSession | null {
+  try {
+    const secret = process.env.NEXTAUTH_SECRET ?? "dev-secret-change-in-production";
+    const [header, body, sig] = token.split(".");
+    if (!header || !body || !sig) return null;
+    const expected = createHmac("sha256", secret)
+      .update(`${header}.${body}`)
+      .digest("base64url");
+    if (expected !== sig) return null;
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString());
+    if (!payload.id || !payload.email) return null;
+    return { user: { id: payload.id, email: payload.email, name: payload.name ?? null } };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Drop-in replacement for getServerSession that also accepts a mobile Bearer JWT.
+ * Usage: const session = await getSession(req);
+ */
+export async function getSession(req: NextRequest): Promise<MobileSession | null> {
+  // Try Bearer token first (mobile)
+  const auth = req.headers.get("authorization") ?? "";
+  if (auth.startsWith("Bearer ")) {
+    const token = auth.slice(7);
+    return verifyMobileJwt(token);
+  }
+
+  // Fall back to NextAuth cookie session (web)
+  const session = await nextAuthGetServerSession(authOptions);
+  if (!session?.user) return null;
+  const user = session.user as { id: string; email: string; name?: string | null };
+  return { user: { id: user.id, email: user.email, name: user.name ?? null } };
+}
