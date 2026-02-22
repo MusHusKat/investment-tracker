@@ -479,6 +479,12 @@ export function computeForPeriod(
 
 // ─── Forecast engine ──────────────────────────────────────────────────────────
 
+/** A single appreciation period segment: grow at `rate` for `years` years. */
+export interface AppreciationPeriod {
+  years: number   // duration of this segment (> 0)
+  rate: number    // annual appreciation rate for this segment (e.g. 0.07 = 7%)
+}
+
 export interface ForecastPoint {
   year: number             // calendar year
   yearsFromNow: number
@@ -505,22 +511,25 @@ export interface ForecastPoint {
  * Project property performance forward in annual steps.
  *
  * Valuation is re-anchored to the latest valuation event (if any), then
- * grows at `appreciationRate` per year. Rent and recurring costs are held
- * at their current run-rate (conservative). Loan balance is projected via
- * the existing computeLoanBalance logic stepped forward year by year.
+ * grows according to the provided appreciation schedule. Rent and recurring
+ * costs are held at their current run-rate (conservative). Loan balance is
+ * projected via the existing computeLoanBalance logic stepped forward year
+ * by year.
  *
  * @param events          - all property events
  * @param ownershipPct    - ownership percentage (0-100)
- * @param appreciationRate - annual appreciation rate (e.g. 0.05 for 5%)
+ * @param appreciationRate - DEPRECATED single flat rate; ignored when `periods` is supplied
  * @param asOf            - projection start date (today)
  * @param years           - how many annual steps to project (e.g. [1,3,5,10])
+ * @param periods         - optional multi-period schedule; overrides `appreciationRate`
  */
 export function computeForecast(
   events: PropertyEvents,
   ownershipPct: number,
   appreciationRate: number,
   asOf: Date,
-  years: number[]
+  years: number[],
+  periods?: AppreciationPeriod[]
 ): ForecastPoint[] {
   const { purchase, loans, tenancies, recurringCosts, valuations } = events
 
@@ -563,12 +572,37 @@ export function computeForecast(
   const totalAcquisitionCost = Math.max(1, (purchase?.purchasePrice ?? 0) + acquisitionCosts)
 
   // ── Project each year ─────────────────────────────────────────────────────
+  // Build a helper: given yearsFromNow (fractional ok), return the projected value
+  // accounting for multi-period appreciation schedule.
+  function projectValue(yearsFromAnchor: number): number {
+    if (periods && periods.length > 0) {
+      // Walk through each segment, applying compound growth
+      let value = anchorValue
+      let remaining = yearsFromAnchor
+      for (const seg of periods) {
+        if (remaining <= 0) break
+        const segYears = Math.min(remaining, seg.years)
+        value *= Math.pow(1 + seg.rate, segYears)
+        remaining -= segYears
+      }
+      // If we've exhausted the schedule but still have years left,
+      // apply the last segment's rate for the remainder
+      if (remaining > 0) {
+        const lastRate = periods[periods.length - 1].rate
+        value *= Math.pow(1 + lastRate, remaining)
+      }
+      return value
+    }
+    // Legacy flat rate
+    return anchorValue * Math.pow(1 + appreciationRate, yearsFromAnchor)
+  }
+
   let cumulativeCashflow = 0
   const results: ForecastPoint[] = []
 
   for (const y of [...years].sort((a, b) => a - b)) {
     const yearsFromAnchor = (y * 365.25 + daysBetween(anchorDate, asOf)) / 365.25
-    const projectedValue = anchorValue * Math.pow(1 + appreciationRate, yearsFromAnchor)
+    const projectedValue = projectValue(yearsFromAnchor)
 
     // Loan balance: step the loan forward y years from asOf
     const futureDate = new Date(asOf)
