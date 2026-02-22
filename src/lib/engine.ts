@@ -500,9 +500,23 @@ export interface ForecastPoint {
   annualInterest: number
   annualNetCashflow: number
   cumulativeCashflow: number    // sum of annualNetCashflow from asOf to this year
-  cumulativeEquityGain: number  // equity at this year minus equity at asOf
-  /** Annualised ROI: (equity gain + cumulative cashflow) / totalAcquisitionCost */
+  /**
+   * Equity gain from today to this year, measured against the true cash-in
+   * basis: (deposit + acquisition costs). A negative value means you haven't
+   * yet recovered stamp duty / legal / agent fees.
+   */
+  cumulativeEquityGain: number
+  /**
+   * Cumulative ROI: (equity gain + cumulative cashflow) / totalAcquisitionCost.
+   * Will keep growing over time — use annualisedRoi for year-on-year comparison.
+   */
   roi: number
+  /**
+   * Annualised ROI (CAGR of total return):
+   * (1 + roi)^(1/years) - 1
+   * Comparable across different time horizons.
+   */
+  annualisedRoi: number
   /** CAGR of property value from asOf */
   valueCagr: number
 }
@@ -564,12 +578,18 @@ export function computeForecast(
   const { balance: currentLoanBalance } = computeLoanBalance(purchase, loans, asOf)
   const currentEquity = anchorValue - currentLoanBalance
 
-  // ── Acquisition cost (denominator for ROI) ────────────────────────────────
+  // ── Acquisition cost (denominator for ROI, and sunk-cost basis for equity gain) ──
   const acquisitionCosts =
     (purchase?.stampDuty ?? 0) +
     (purchase?.legalFees ?? 0) +
     (purchase?.buyersAgentFee ?? 0)
   const totalAcquisitionCost = Math.max(1, (purchase?.purchasePrice ?? 0) + acquisitionCosts)
+
+  // The "true cash in" basis for equity gain: the equity you'd have if you'd
+  // recovered every dollar of acquisition cost. On day 0 your property is worth
+  // purchasePrice but you've spent purchasePrice + acquisitionCosts, so equity
+  // gain starts negative by acquisitionCosts until the property appreciates enough.
+  const equityGainBasis = currentEquity - acquisitionCosts
 
   // ── Project each year ─────────────────────────────────────────────────────
   // Build a helper: given yearsFromNow (fractional ok), return the projected value
@@ -624,10 +644,15 @@ export function computeForecast(
     const deltaYears = y - prevY
     cumulativeCashflow += annualNetCashflow * deltaYears
 
-    const cumulativeEquityGain = equity - currentEquity
+    const cumulativeEquityGain = equity - equityGainBasis
 
     // ROI = (equity gain + cumulative cashflow received) / total cost base
     const roi = (cumulativeEquityGain + cumulativeCashflow) / totalAcquisitionCost
+
+    // Annualised ROI: CAGR of total return — comparable across horizons
+    const annualisedRoi = y > 0
+      ? Math.pow(Math.max(0, 1 + roi), 1 / y) - 1
+      : roi
 
     // CAGR of value from asOf
     const valueCagr = y > 0
@@ -648,6 +673,7 @@ export function computeForecast(
       cumulativeCashflow,
       cumulativeEquityGain,
       roi,
+      annualisedRoi,
       valueCagr,
     })
   }
