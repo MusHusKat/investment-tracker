@@ -73,3 +73,24 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   return NextResponse.json({ success: true })
 }
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const property = await assertPropertyOwner(req, params.id)
+  if (!property) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const body = await req.json()
+
+  const event = await prisma.saleEvent.update({
+    where: { propertyId: params.id },
+    data: {
+      settlementDate: body.settlementDate ? new Date(body.settlementDate) : undefined,
+      salePrice: body.salePrice ?? undefined,
+      agentFee: body.agentFee ?? undefined,
+      legalFees: body.legalFees ?? undefined,
+      otherCosts: body.otherCosts ?? undefined,
+      mortgageExit: body.mortgageExit ?? undefined,
+      notes: body.notes ?? undefined,
+    },
+  })
+  return NextResponse.json(event)
+}

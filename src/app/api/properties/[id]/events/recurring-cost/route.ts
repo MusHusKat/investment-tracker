@@ -37,3 +37,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   })
   return NextResponse.json(event, { status: 201 })
 }
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const property = await assertPropertyOwner(req, params.id)
+  if (!property) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const body = await req.json()
+  const { eventId, ...fields } = body
+  if (!eventId) return NextResponse.json({ error: "eventId required" }, { status: 400 })
+
+  const event = await prisma.recurringCostEvent.update({
+    where: { id: eventId },
+    data: {
+      effectiveDate: fields.effectiveDate ? new Date(fields.effectiveDate) : undefined,
+      endDate: fields.endDate ? new Date(fields.endDate) : fields.endDate === null ? null : undefined,
+      category: fields.category ?? undefined,
+      feeType: fields.feeType ?? undefined,
+      amount: fields.amount ?? undefined,
+      cadence: fields.cadence ?? undefined,
+      notes: fields.notes ?? undefined,
+    },
+  })
+  return NextResponse.json(event)
+}

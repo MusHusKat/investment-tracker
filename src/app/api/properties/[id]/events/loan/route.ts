@@ -41,3 +41,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   })
   return NextResponse.json(event, { status: 201 })
 }
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const property = await assertPropertyOwner(req, params.id)
+  if (!property) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const body = await req.json()
+  const { eventId, ...fields } = body
+  if (!eventId) return NextResponse.json({ error: "eventId required" }, { status: 400 })
+
+  const event = await prisma.loanEvent.update({
+    where: { id: eventId },
+    data: {
+      effectiveDate: fields.effectiveDate ? new Date(fields.effectiveDate) : undefined,
+      lender: fields.lender ?? undefined,
+      loanType: fields.loanType ?? undefined,
+      rateType: fields.rateType ?? undefined,
+      annualRate: fields.annualRate ?? undefined,
+      repaymentAmount: fields.repaymentAmount ?? undefined,
+      repaymentCadence: fields.repaymentCadence ?? undefined,
+      fixedExpiry: fields.fixedExpiry ? new Date(fields.fixedExpiry) : fields.fixedExpiry === null ? null : undefined,
+      offsetBalance: fields.offsetBalance ?? undefined,
+      manualLoanBalance: fields.manualLoanBalance ?? undefined,
+      notes: fields.notes ?? undefined,
+    },
+  })
+  return NextResponse.json(event)
+}

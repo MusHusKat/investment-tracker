@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const event = await prisma.tenancyEvent.create({
     data: {
       propertyId: params.id,
-      type: body.type,                   // "START" | "RENT_CHANGE" | "END"
+      type: body.type,
       effectiveDate: new Date(body.effectiveDate),
       weeklyRent: body.weeklyRent ?? null,
       leaseTermMonths: body.leaseTermMonths ?? null,
@@ -34,4 +34,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   })
   return NextResponse.json(event, { status: 201 })
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const property = await assertPropertyOwner(req, params.id)
+  if (!property) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const body = await req.json()
+  const { eventId, ...fields } = body
+  if (!eventId) return NextResponse.json({ error: "eventId required" }, { status: 400 })
+
+  const event = await prisma.tenancyEvent.update({
+    where: { id: eventId },
+    data: {
+      type: fields.type ?? undefined,
+      effectiveDate: fields.effectiveDate ? new Date(fields.effectiveDate) : undefined,
+      weeklyRent: fields.weeklyRent ?? undefined,
+      leaseTermMonths: fields.leaseTermMonths ?? undefined,
+      notes: fields.notes ?? undefined,
+    },
+  })
+  return NextResponse.json(event)
 }
