@@ -1,0 +1,186 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?   // hashed; null = magic-link only (TODO)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  properties    Property[]
+  portfolios    Portfolio[]
+
+  // NextAuth adapter relations
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Core Domain ─────────────────────────────────────────────────────────────
+
+model Property {
+  id            String    @id @default(cuid())
+  userId        String
+  name          String
+  address       String?
+  tags          String[]  @default([])
+  purchaseDate  DateTime?
+  purchasePrice Decimal?  @db.Decimal(15, 2)
+  ownershipPct  Decimal   @default(100) @db.Decimal(5, 2)  // 0-100
+  notes         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshots     YearlySnapshot[]
+  loans         Loan[]
+  valuations    Valuation[]
+  portfolioProperties PortfolioProperty[]
+
+  @@index([userId])
+}
+
+model YearlySnapshot {
+  id          String   @id @default(cuid())
+  propertyId  String
+  year        Int      // calendar year e.g. 2024
+
+  // Income
+  rentIncome      Decimal?  @db.Decimal(15, 2)
+  otherIncome     Decimal?  @db.Decimal(15, 2)
+
+  // Expenses (operating)
+  maintenance     Decimal?  @db.Decimal(15, 2)
+  insurance       Decimal?  @db.Decimal(15, 2)
+  councilRates    Decimal?  @db.Decimal(15, 2)
+  strataFees      Decimal?  @db.Decimal(15, 2)
+  propertyMgmtFees Decimal? @db.Decimal(15, 2)
+  utilities       Decimal?  @db.Decimal(15, 2)
+  otherExpenses   Decimal?  @db.Decimal(15, 2)
+
+  // Loan payments (manual yearly totals)
+  interestPaid    Decimal?  @db.Decimal(15, 2)
+  principalPaid   Decimal?  @db.Decimal(15, 2)
+
+  // Capital expenditure
+  capex           Decimal?  @db.Decimal(15, 2)
+
+  // Closing loan balance (optional; used for LVR calc)
+  loanBalance     Decimal?  @db.Decimal(15, 2)
+
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, year])
+  @@index([propertyId])
+  @@index([year])
+}
+
+model Loan {
+  id              String    @id @default(cuid())
+  propertyId      String
+  lender          String?
+  accountNumber   String?
+  originalAmount  Decimal?  @db.Decimal(15, 2)
+  interestRate    Decimal?  @db.Decimal(5, 4)  // e.g. 0.0625 = 6.25%
+  loanType        String?   // "fixed" | "variable" | "split"
+  fixedUntil      DateTime?
+  startDate       DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model Valuation {
+  id          String   @id @default(cuid())
+  propertyId  String
+  valuedAt    DateTime
+  value       Decimal  @db.Decimal(15, 2)
+  source      String?  // "appraisal" | "bank" | "estimate"
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([valuedAt])
+}
+
+model Portfolio {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  properties  PortfolioProperty[]
+
+  @@index([userId])
+}
+
+model PortfolioProperty {
+  portfolioId String
+  propertyId  String
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  property  Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([portfolioId, propertyId])
+}
