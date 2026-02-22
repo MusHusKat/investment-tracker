@@ -26,460 +26,337 @@ async function main() {
   console.log(`✅ User: ${user.email}`);
 
   // ─── Properties ───────────────────────────────────────────────────────────
+  //
+  // A  193 Frenchville Rd | Frenchville QLD 4701 | House   — purchased Nov 2024
+  // B  22/208 North Beach Dr | Tuart Hill WA 6060 | Villa  — purchased Feb 2025
+  // C  6/1 Golden Avenue | Chelsea VIC 3196 | Villa        — purchased Feb 2026
 
-  const rockhampton = await prisma.property.upsert({
-    where: { id: "prop_rockhampton_house" },
+  const propA = await prisma.property.upsert({
+    where: { id: "prop_frenchville" },
     update: {
-      name: "Rockhampton House",
-      address: "193 Frenchville Road, QLD",
-      tags: ["house", "queensland"],
-      purchaseDate: new Date("2024-10-10"),
-      purchasePrice: 550000,
+      name: "193 Frenchville Rd",
+      address: "193 Frenchville Road, Frenchville QLD 4701",
+      tags: ["house", "queensland", "rockhampton"],
+      purchaseDate: new Date("2024-11-01"),
+      purchasePrice: 555000,
       ownershipPct: 100,
       isActive: true,
-      notes: null,
+      notes:
+        "Buyers agent 2.5% ($13,875). Stamp duty $18,000. I/O 5 yrs @ 5.74%. Offset $150k.",
     },
     create: {
-      id: "prop_rockhampton_house",
+      id: "prop_frenchville",
       userId: user.id,
-      name: "Rockhampton House",
-      address: "193 Frenchville Road, QLD",
-      tags: ["house", "queensland"],
-      purchaseDate: new Date("2024-10-10"),
-      purchasePrice: 550000,
+      name: "193 Frenchville Rd",
+      address: "193 Frenchville Road, Frenchville QLD 4701",
+      tags: ["house", "queensland", "rockhampton"],
+      purchaseDate: new Date("2024-11-01"),
+      purchasePrice: 555000,
       ownershipPct: 100,
       isActive: true,
+      notes:
+        "Buyers agent 2.5% ($13,875). Stamp duty $18,000. I/O 5 yrs @ 5.74%. Offset $150k.",
     },
   });
 
-  console.log(`✅ Properties: ${rockhampton.name}`);
+  const propB = await prisma.property.upsert({
+    where: { id: "prop_tuart_hill" },
+    update: {
+      name: "22/208 North Beach Dr",
+      address: "22/208 North Beach Drive, Tuart Hill WA 6060",
+      tags: ["villa", "western-australia", "tuart-hill"],
+      purchaseDate: new Date("2025-02-01"),
+      purchasePrice: 530000,
+      ownershipPct: 100,
+      isActive: true,
+      notes:
+        "Buyers agent 2.5% ($13,250). Stamp duty $19,190. I/O 3 yrs @ 4.99%. No offset.",
+    },
+    create: {
+      id: "prop_tuart_hill",
+      userId: user.id,
+      name: "22/208 North Beach Dr",
+      address: "22/208 North Beach Drive, Tuart Hill WA 6060",
+      tags: ["villa", "western-australia", "tuart-hill"],
+      purchaseDate: new Date("2025-02-01"),
+      purchasePrice: 530000,
+      ownershipPct: 100,
+      isActive: true,
+      notes:
+        "Buyers agent 2.5% ($13,250). Stamp duty $19,190. I/O 3 yrs @ 4.99%. No offset.",
+    },
+  });
+
+  const propC = await prisma.property.upsert({
+    where: { id: "prop_chelsea" },
+    update: {
+      name: "6/1 Golden Avenue",
+      address: "6/1 Golden Avenue, Chelsea VIC 3196",
+      tags: ["villa", "victoria", "chelsea"],
+      purchaseDate: new Date("2026-02-01"),
+      purchasePrice: 700000,
+      ownershipPct: 100,
+      isActive: true,
+      notes:
+        "Buyers agent 2.5% ($17,500). Stamp duty $37,070. I/O 3 yrs @ 5.89%. No offset.",
+    },
+    create: {
+      id: "prop_chelsea",
+      userId: user.id,
+      name: "6/1 Golden Avenue",
+      address: "6/1 Golden Avenue, Chelsea VIC 3196",
+      tags: ["villa", "victoria", "chelsea"],
+      purchaseDate: new Date("2026-02-01"),
+      purchasePrice: 700000,
+      ownershipPct: 100,
+      isActive: true,
+      notes:
+        "Buyers agent 2.5% ($17,500). Stamp duty $37,070. I/O 3 yrs @ 5.89%. No offset.",
+    },
+  });
+
+  console.log(
+    `✅ Properties: ${[propA, propB, propC].map((p) => p.name).join(", ")}`
+  );
 
   // ─── Yearly Snapshots ─────────────────────────────────────────────────────
+  //
+  // "Year 1" in the spreadsheet = first partial/full fiscal year of ownership.
+  // Mapped to calendar year as follows:
+  //   A (bought Nov 2024) → Year 1 spreadsheet = 2025 (partial, ~2 months in 2024 + rest of FY)
+  //   B (bought Feb 2025) → Year 1 spreadsheet = 2025 (partial year)
+  //   C (bought Feb 2026) → no actuals yet; Year 1 spreadsheet = 2026 (partial)
+  //
+  // Expense mapping from spreadsheet:
+  //   MngtCost  → propertyMgmtFees  (management + letting + advertising + admin)
+  //   Insurance → insurance (from Total Costs "Insr." column)
+  //   Repairs   → maintenance (from Total Costs "Repairs" column)
+  //   Water/Council/Strata → councilRates / strataFees / utilities
+
+  // ── A: 193 Frenchville Rd — Year 2025 ────────────────────────────────────
+  // Spreadsheet Year 1:
+  //   Rent $22,052 | MngtCost $4,637.30 | Tax Rebate -$1,880
+  //   Interest $11,648.12 | Principal $1,732.88 | Loan Left $431,167.12
+  //   Equity $208,832.88 | LVR 67.37% | Cashflow $2,153.70 | Est. Value $640,000
+  // Expense detail:
+  //   Insurance $2,042 | Repairs/Maintenance $2,500 | Water $2,500 | Council $0 | Strata $1,500
+  //   MngtCost total $4,637.30 covers: management 8% + letting 1wk + advertising + lease renewal + admin
 
   await prisma.yearlySnapshot.upsert({
-    where: {
-      propertyId_year: { propertyId: rockhampton.id, year: 2025 },
-    },
+    where: { propertyId_year: { propertyId: propA.id, year: 2025 } },
     update: {
-      rentIncome: 22052.00,
+      rentIncome: 22052.0,
       otherIncome: null,
-      maintenance: 1370.50,
-      insurance: 1500.00,
-      councilRates: null,
-      strataFees: null,
-      propertyMgmtFees: 2803.70,
-      utilities: 454.27,
+      maintenance: 2500.0,
+      insurance: 2042.0,
+      councilRates: 0.0,
+      strataFees: 1500.0,
+      propertyMgmtFees: 4637.3,
+      utilities: 2500.0, // water rates
       otherExpenses: null,
-      interestPaid: 11648.00,
-      principalPaid: 1733.00,
+      interestPaid: 11648.12,
+      principalPaid: 1732.88,
       capex: null,
-      loanBalance: 432000.00,
-      notes: null,
+      loanBalance: 431167.12,
+      notes:
+        "Partial year (purchased Nov 2024). Est. value $640k. Offset $150k active.",
     },
     create: {
-      propertyId: rockhampton.id,
+      propertyId: propA.id,
       year: 2025,
-      rentIncome: 22052.00,
+      rentIncome: 22052.0,
       otherIncome: null,
-      maintenance: 1370.50,
-      insurance: 1500.00,
-      councilRates: null,
-      strataFees: null,
-      propertyMgmtFees: 2803.70,
-      utilities: 454.27,
+      maintenance: 2500.0,
+      insurance: 2042.0,
+      councilRates: 0.0,
+      strataFees: 1500.0,
+      propertyMgmtFees: 4637.3,
+      utilities: 2500.0,
       otherExpenses: null,
-      interestPaid: 11648.00,
-      principalPaid: 1733.00,
+      interestPaid: 11648.12,
+      principalPaid: 1732.88,
       capex: null,
-      loanBalance: 432000.00,
-      notes: null,
+      loanBalance: 431167.12,
+      notes:
+        "Partial year (purchased Nov 2024). Est. value $640k. Offset $150k active.",
     },
   });
 
-  console.log(`✅ Snapshots: 1 row (Rockhampton House / 2025)`);
+  // ── B: 22/208 North Beach Dr — Year 2025 ─────────────────────────────────
+  // Spreadsheet Year 1:
+  //   Rent $10,980 | MngtCost $4,552.60 | Tax Rebate $1,880
+  //   Interest $10,022.29 | Principal $349.71 | Loan Left $424,000
+  //   Equity $176,000 | LVR 70.67% | Cashflow -$2,064.60 | Est. Value $600,000
+  // Expense detail:
+  //   Insurance $0 (not depreciated) | Repairs $2,500 | Land/Water $325 | Strata $3,000 | Council $2,500
+  //   MngtCost $4,552.60: management 7.15% + letting + advertising + PCR + final bond + inspection + renewal
 
-  console.log("\n🎉 Seed complete!");
-  console.log("   Login: demo@example.com / devpassword");
-}
-
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
-
-
-const prisma = new PrismaClient();
-
-function simpleHash(password: string): string {
-  // Very simple hash for dev seed only — use bcrypt in production
-  return hash("sha256", password);
-}
-
-async function main() {
-  console.log("🌱 Seeding database...");
-
-  // Create demo user
-  const user = await prisma.user.upsert({
-    where: { email: "demo@example.com" },
-    update: {},
+  await prisma.yearlySnapshot.upsert({
+    where: { propertyId_year: { propertyId: propB.id, year: 2025 } },
+    update: {
+      rentIncome: 10980.0,
+      otherIncome: null,
+      maintenance: 2500.0,
+      insurance: 0.0,
+      councilRates: 2500.0,
+      strataFees: 3000.0,
+      propertyMgmtFees: 4552.6,
+      utilities: 325.0, // land/water rates
+      otherExpenses: null,
+      interestPaid: 10022.29,
+      principalPaid: 349.71,
+      capex: null,
+      loanBalance: 424000.0,
+      notes:
+        "Partial year (purchased Feb 2025). Est. value $600k. I/O period.",
+    },
     create: {
-      email: "demo@example.com",
-      name: "Demo User",
-      password: simpleHash("devpassword"),
+      propertyId: propB.id,
+      year: 2025,
+      rentIncome: 10980.0,
+      otherIncome: null,
+      maintenance: 2500.0,
+      insurance: 0.0,
+      councilRates: 2500.0,
+      strataFees: 3000.0,
+      propertyMgmtFees: 4552.6,
+      utilities: 325.0,
+      otherExpenses: null,
+      interestPaid: 10022.29,
+      principalPaid: 349.71,
+      capex: null,
+      loanBalance: 424000.0,
+      notes:
+        "Partial year (purchased Feb 2025). Est. value $600k. I/O period.",
     },
   });
 
-  console.log(`✅ User: ${user.email}`);
+  // ── C: 6/1 Golden Avenue, Chelsea — Year 2026 ────────────────────────────
+  // Purchased Feb 2026 — seeding with spreadsheet Year 1 projections as a
+  // starting-point snapshot. Mark as projected until actuals are available.
+  // Spreadsheet Year 1:
+  //   Rent $29,638 | MngtCost $12,338.80 | Tax Rebate $7,520
+  //   Interest $32,984 | Principal $0 | Loan Left $560,000
+  //   Equity $189,000 | LVR 74.77% | Cashflow -$8,164.80 | Est. Value $749,000
+  // Expense detail:
+  //   Insurance $500 | Repairs $3,000 | Land/Water $975 | Strata $1,585 | Council $2,420
+  //   MngtCost $12,338.80: management 8% + letting + advertising + PCR + final bond + inspection + renewal
 
-  // Create properties
-  const prop1 = await prisma.property.upsert({
-    where: { id: "prop_sydney_unit" },
-    update: {},
+  await prisma.yearlySnapshot.upsert({
+    where: { propertyId_year: { propertyId: propC.id, year: 2026 } },
+    update: {
+      rentIncome: 29638.0,
+      otherIncome: null,
+      maintenance: 3000.0,
+      insurance: 500.0,
+      councilRates: 2420.0,
+      strataFees: 1585.0,
+      propertyMgmtFees: 12338.8,
+      utilities: 975.0, // land/water rates
+      otherExpenses: null,
+      interestPaid: 32984.0,
+      principalPaid: 0.0,
+      capex: null,
+      loanBalance: 560000.0,
+      notes:
+        "Projected Year 1 (purchased Feb 2026). Est. value $749k. I/O period. Update with actuals during FY.",
+    },
     create: {
-      id: "prop_sydney_unit",
-      userId: user.id,
-      name: "Sydney CBD Unit",
-      address: "42 George St, Sydney NSW 2000",
-      tags: ["unit", "sydney", "positive-cashflow"],
-      purchaseDate: new Date("2018-06-15"),
-      purchasePrice: 750000,
-      ownershipPct: 100,
+      propertyId: propC.id,
+      year: 2026,
+      rentIncome: 29638.0,
+      otherIncome: null,
+      maintenance: 3000.0,
+      insurance: 500.0,
+      councilRates: 2420.0,
+      strataFees: 1585.0,
+      propertyMgmtFees: 12338.8,
+      utilities: 975.0,
+      otherExpenses: null,
+      interestPaid: 32984.0,
+      principalPaid: 0.0,
+      capex: null,
+      loanBalance: 560000.0,
+      notes:
+        "Projected Year 1 (purchased Feb 2026). Est. value $749k. I/O period. Update with actuals during FY.",
     },
   });
 
-  const prop2 = await prisma.property.upsert({
-    where: { id: "prop_melbourne_house" },
-    update: {},
-    create: {
-      id: "prop_melbourne_house",
-      userId: user.id,
-      name: "Melbourne Inner House",
-      address: "7 Collins Lane, Fitzroy VIC 3065",
-      tags: ["house", "melbourne", "negative-gearing"],
-      purchaseDate: new Date("2020-03-01"),
-      purchasePrice: 1100000,
-      ownershipPct: 100,
-    },
-  });
+  console.log(
+    `✅ Snapshots: 2025 (A+B), 2026 (C projected)`
+  );
 
-  const prop3 = await prisma.property.upsert({
-    where: { id: "prop_brisbane_townhouse" },
-    update: {},
-    create: {
-      id: "prop_brisbane_townhouse",
-      userId: user.id,
-      name: "Brisbane Townhouse",
-      address: "15 River Rd, New Farm QLD 4005",
-      tags: ["townhouse", "brisbane"],
-      purchaseDate: new Date("2021-09-10"),
-      purchasePrice: 680000,
-      ownershipPct: 50, // Joint ownership
-    },
-  });
+  // ─── Loans ────────────────────────────────────────────────────────────────
 
-  console.log(`✅ Properties: ${[prop1, prop2, prop3].map((p) => p.name).join(", ")}`);
-
-  // Seed loans
   await prisma.loan.createMany({
     skipDuplicates: true,
     data: [
       {
-        propertyId: prop1.id,
-        lender: "CommBank",
-        originalAmount: 562500,
+        propertyId: propA.id,
+        lender: "Unknown",
+        originalAmount: 432900,
+        interestRate: 0.0574,
+        loanType: "interest-only",
+        fixedUntil: null,
+        startDate: new Date("2024-11-01"),
+      },
+      {
+        propertyId: propB.id,
+        lender: "Unknown",
+        originalAmount: 424000,
+        interestRate: 0.0499,
+        loanType: "interest-only",
+        fixedUntil: null,
+        startDate: new Date("2025-02-01"),
+      },
+      {
+        propertyId: propC.id,
+        lender: "Unknown",
+        originalAmount: 560000,
         interestRate: 0.0589,
-        loanType: "variable",
-        startDate: new Date("2018-06-15"),
-      },
-      {
-        propertyId: prop2.id,
-        lender: "ANZ",
-        originalAmount: 880000,
-        interestRate: 0.0625,
-        loanType: "fixed",
-        fixedUntil: new Date("2025-03-01"),
-        startDate: new Date("2020-03-01"),
-      },
-      {
-        propertyId: prop3.id,
-        lender: "Westpac",
-        originalAmount: 544000,
-        interestRate: 0.061,
-        loanType: "variable",
-        startDate: new Date("2021-09-10"),
+        loanType: "interest-only",
+        fixedUntil: null,
+        startDate: new Date("2026-02-01"),
       },
     ],
   });
 
-  // Seed valuations
+  console.log(`✅ Loans: 3 rows`);
+
+  // ─── Valuations ───────────────────────────────────────────────────────────
+  // Seeding the spreadsheet's Year 1 estimated values as at end of first year.
+
   await prisma.valuation.createMany({
     skipDuplicates: true,
     data: [
       {
-        propertyId: prop1.id,
-        valuedAt: new Date("2022-06-30"),
-        value: 880000,
-        source: "appraisal",
-      },
-      {
-        propertyId: prop1.id,
-        valuedAt: new Date("2023-06-30"),
-        value: 940000,
+        propertyId: propA.id,
+        valuedAt: new Date("2025-12-31"),
+        value: 640000,
         source: "estimate",
+        notes: "Spreadsheet Year 1 estimate",
       },
       {
-        propertyId: prop1.id,
-        valuedAt: new Date("2024-06-30"),
-        value: 985000,
-        source: "appraisal",
-      },
-      {
-        propertyId: prop2.id,
-        valuedAt: new Date("2023-06-30"),
-        value: 1380000,
-        source: "appraisal",
-      },
-      {
-        propertyId: prop2.id,
-        valuedAt: new Date("2024-06-30"),
-        value: 1450000,
+        propertyId: propB.id,
+        valuedAt: new Date("2025-12-31"),
+        value: 600000,
         source: "estimate",
+        notes: "Spreadsheet Year 1 estimate",
       },
       {
-        propertyId: prop3.id,
-        valuedAt: new Date("2023-06-30"),
-        value: 780000,
+        propertyId: propC.id,
+        valuedAt: new Date("2026-12-31"),
+        value: 749000,
         source: "estimate",
-      },
-      {
-        propertyId: prop3.id,
-        valuedAt: new Date("2024-06-30"),
-        value: 820000,
-        source: "appraisal",
+        notes: "Spreadsheet Year 1 projection",
       },
     ],
   });
 
-  // Seed yearly snapshots for all 3 properties across 2021-2024
-  const snapshotData = [
-    // Sydney CBD Unit
-    {
-      propertyId: prop1.id,
-      year: 2021,
-      rentIncome: 32400,
-      otherIncome: 0,
-      maintenance: 1200,
-      insurance: 1800,
-      councilRates: 1500,
-      strataFees: 4800,
-      propertyMgmtFees: 2430,
-      utilities: 0,
-      otherExpenses: 500,
-      interestPaid: 28500,
-      principalPaid: 12000,
-      capex: 0,
-      loanBalance: 490000,
-      notes: "Tenant renewed, no vacancy",
-    },
-    {
-      propertyId: prop1.id,
-      year: 2022,
-      rentIncome: 36400,
-      otherIncome: 500,
-      maintenance: 2800,
-      insurance: 1900,
-      councilRates: 1550,
-      strataFees: 5200,
-      propertyMgmtFees: 2730,
-      utilities: 0,
-      otherExpenses: 600,
-      interestPaid: 27000,
-      principalPaid: 13000,
-      capex: 4500, // new hot water system
-      loanBalance: 477000,
-      notes: "Hot water replacement capex",
-    },
-    {
-      propertyId: prop1.id,
-      year: 2023,
-      rentIncome: 42000,
-      otherIncome: 0,
-      maintenance: 1500,
-      insurance: 2100,
-      councilRates: 1600,
-      strataFees: 5400,
-      propertyMgmtFees: 3150,
-      utilities: 0,
-      otherExpenses: 400,
-      interestPaid: 29500,
-      principalPaid: 14000,
-      capex: 0,
-      loanBalance: 463000,
-      notes: null,
-    },
-    {
-      propertyId: prop1.id,
-      year: 2024,
-      rentIncome: 46800,
-      otherIncome: 0,
-      maintenance: 900,
-      insurance: 2200,
-      councilRates: 1650,
-      strataFees: 5600,
-      propertyMgmtFees: 3510,
-      utilities: 0,
-      otherExpenses: 300,
-      interestPaid: 27800,
-      principalPaid: 15500,
-      capex: 0,
-      loanBalance: 447500,
-      notes: "Strong rental growth",
-    },
-    // Melbourne Inner House
-    {
-      propertyId: prop2.id,
-      year: 2021,
-      rentIncome: 42000,
-      otherIncome: 0,
-      maintenance: 3500,
-      insurance: 2400,
-      councilRates: 2200,
-      strataFees: 0,
-      propertyMgmtFees: 3150,
-      utilities: 800,
-      otherExpenses: 700,
-      interestPaid: 52800,
-      principalPaid: 8000,
-      capex: 0,
-      loanBalance: 850000,
-      notes: "COVID discount offered in Q1",
-    },
-    {
-      propertyId: prop2.id,
-      year: 2022,
-      rentIncome: 48000,
-      otherIncome: 0,
-      maintenance: 6500,
-      insurance: 2600,
-      councilRates: 2300,
-      strataFees: 0,
-      propertyMgmtFees: 3600,
-      utilities: 900,
-      otherExpenses: 800,
-      interestPaid: 55000,
-      principalPaid: 8500,
-      capex: 18000, // kitchen renovation
-      loanBalance: 841500,
-      notes: "Kitchen renovation capex",
-    },
-    {
-      propertyId: prop2.id,
-      year: 2023,
-      rentIncome: 58000,
-      otherIncome: 0,
-      maintenance: 2800,
-      insurance: 2800,
-      councilRates: 2400,
-      strataFees: 0,
-      propertyMgmtFees: 4350,
-      utilities: 950,
-      otherExpenses: 600,
-      interestPaid: 52500,
-      principalPaid: 9000,
-      capex: 0,
-      loanBalance: 832500,
-      notes: "Post-reno rental uplift",
-    },
-    {
-      propertyId: prop2.id,
-      year: 2024,
-      rentIncome: 62400,
-      otherIncome: 1200,
-      maintenance: 3200,
-      insurance: 2900,
-      councilRates: 2500,
-      strataFees: 0,
-      propertyMgmtFees: 4680,
-      utilities: 950,
-      otherExpenses: 500,
-      interestPaid: 52000,
-      principalPaid: 9500,
-      capex: 0,
-      loanBalance: 823000,
-      notes: null,
-    },
-    // Brisbane Townhouse
-    {
-      propertyId: prop3.id,
-      year: 2022,
-      rentIncome: 26000,
-      otherIncome: 0,
-      maintenance: 1800,
-      insurance: 1600,
-      councilRates: 1800,
-      strataFees: 3200,
-      propertyMgmtFees: 1950,
-      utilities: 400,
-      otherExpenses: 300,
-      interestPaid: 31500,
-      principalPaid: 6000,
-      capex: 0,
-      loanBalance: 520000,
-      notes: "Purchased Sep 2021; partial year",
-    },
-    {
-      propertyId: prop3.id,
-      year: 2023,
-      rentIncome: 33800,
-      otherIncome: 0,
-      maintenance: 2200,
-      insurance: 1700,
-      councilRates: 1900,
-      strataFees: 3400,
-      propertyMgmtFees: 2535,
-      utilities: 450,
-      otherExpenses: 400,
-      interestPaid: 30800,
-      principalPaid: 6500,
-      capex: 0,
-      loanBalance: 513500,
-      notes: null,
-    },
-    {
-      propertyId: prop3.id,
-      year: 2024,
-      rentIncome: 38480,
-      otherIncome: 0,
-      maintenance: 1500,
-      insurance: 1750,
-      councilRates: 1950,
-      strataFees: 3600,
-      propertyMgmtFees: 2886,
-      utilities: 450,
-      otherExpenses: 350,
-      interestPaid: 30000,
-      principalPaid: 7000,
-      capex: 3500, // deck repair
-      loanBalance: 506500,
-      notes: "Deck repair capex",
-    },
-  ];
+  console.log(`✅ Valuations: 3 rows`);
 
-  for (const snap of snapshotData) {
-    await prisma.yearlySnapshot.upsert({
-      where: { propertyId_year: { propertyId: snap.propertyId, year: snap.year } },
-      update: snap,
-      create: snap,
-    });
-  }
+  // ─── Portfolio ────────────────────────────────────────────────────────────
 
-  console.log(`✅ Snapshots: ${snapshotData.length} rows`);
-
-  // Seed a portfolio
   const portfolio = await prisma.portfolio.upsert({
     where: { id: "portfolio_all" },
     update: { name: "All Properties" },
@@ -487,34 +364,21 @@ async function main() {
       id: "portfolio_all",
       userId: user.id,
       name: "All Properties",
-      description: "Complete portfolio view",
+      description: "Full portfolio — A, B and C",
     },
   });
 
-  const sydneyMelb = await prisma.portfolio.upsert({
-    where: { id: "portfolio_eastern" },
-    update: { name: "Eastern Seaboard" },
-    create: {
-      id: "portfolio_eastern",
-      userId: user.id,
-      name: "Eastern Seaboard",
-      description: "Sydney + Melbourne properties",
-    },
-  });
-
-  // Link properties to portfolios
   await prisma.portfolioProperty.createMany({
     skipDuplicates: true,
     data: [
-      { portfolioId: portfolio.id, propertyId: prop1.id },
-      { portfolioId: portfolio.id, propertyId: prop2.id },
-      { portfolioId: portfolio.id, propertyId: prop3.id },
-      { portfolioId: sydneyMelb.id, propertyId: prop1.id },
-      { portfolioId: sydneyMelb.id, propertyId: prop2.id },
+      { portfolioId: portfolio.id, propertyId: propA.id },
+      { portfolioId: portfolio.id, propertyId: propB.id },
+      { portfolioId: portfolio.id, propertyId: propC.id },
     ],
   });
 
-  console.log(`✅ Portfolios: ${[portfolio, sydneyMelb].map((p) => p.name).join(", ")}`);
+  console.log(`✅ Portfolio: ${portfolio.name}`);
+
   console.log("\n🎉 Seed complete!");
   console.log("   Login: demo@example.com / devpassword");
 }
