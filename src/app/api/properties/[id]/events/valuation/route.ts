@@ -54,3 +54,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   })
   return NextResponse.json(event)
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const property = await assertPropertyOwner(req, params.id)
+  if (!property) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const eventId = searchParams.get("eventId")
+  if (!eventId) return NextResponse.json({ error: "eventId required" }, { status: 400 })
+
+  await prisma.valuationEvent.delete({ where: { id: eventId } })
+  return new NextResponse(null, { status: 204 })
+}

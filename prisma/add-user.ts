@@ -1,8 +1,10 @@
 /**
- * Add a user to the database.
+ * Add or update a user in the database.
  *
  * Usage:
  *   pnpm db:add-user <email> <password> [name]
+ *
+ * If the user already exists, their password (and optionally name) will be updated.
  *
  * Examples:
  *   pnpm db:add-user alice@example.com secretpass "Alice Smith"
@@ -38,8 +40,15 @@ async function main() {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.error(`User already exists: ${email}`);
-    process.exit(1);
+    const updated = await prisma.user.update({
+      where: { email },
+      data: {
+        password: simpleHash(password),
+        ...(name ? { name } : {}),
+      },
+    });
+    console.log(`✅ Updated password for: ${updated.email} (${updated.name})`);
+    return;
   }
 
   const derivedName = name ?? email.split("@")[0];
