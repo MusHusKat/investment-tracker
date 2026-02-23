@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   // ── Load & compute per-property forecasts ────────────────────────────────────
   const propertyRecords = await prisma.property.findMany({
-    where: { id: { in: [...resolvedPropertyIds] }, userId: session.user.id, isActive: true },
+    where: { id: { in: Array.from(resolvedPropertyIds) }, userId: session.user.id, isActive: true },
     select: { id: true, name: true, appreciationRate: true, ownershipPct: true },
   })
 
