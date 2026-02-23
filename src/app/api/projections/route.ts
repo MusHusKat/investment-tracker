@@ -125,6 +125,11 @@ export async function POST(req: NextRequest) {
     // Weighted average CAGR
     const avgValueCagr = pts.reduce((acc, pt) => acc + pt.valueCagr, 0) / pts.length
 
+    // Annualised aggregate ROI (CAGR of total return)
+    const aggAnnualisedRoi = y > 0
+      ? Math.pow(Math.max(0, 1 + aggRoi), 1 / y) - 1
+      : aggRoi
+
     return {
       year: pts[0].year,
       yearsFromNow: y,
@@ -139,6 +144,7 @@ export async function POST(req: NextRequest) {
       cumulativeCashflow: totalCumulativeCashflow,
       cumulativeEquityGain: totalCumulativeEquityGain,
       roi: aggRoi,
+      annualisedRoi: aggAnnualisedRoi,
       valueCagr: avgValueCagr,
     } as ForecastPoint
   }).filter(Boolean) as ForecastPoint[]

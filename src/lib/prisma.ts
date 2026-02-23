@@ -1,5 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 
+// Prevent multiple Prisma Client instances in development (hot reload creates
+// new instances on every module reload). In production (serverless) each
+// function invocation gets its own module scope, so the singleton is per-
+// invocation — Neon's connection pooler handles the actual connection pool.
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
@@ -7,7 +11,7 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
